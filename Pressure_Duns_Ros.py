@@ -243,6 +243,7 @@ def look_graf(point: float, mass_graf: list) -> float:
     Функция для поиска значения по графику.
     Находим интервал в который попадает значение point на графике mass_graf бинарным поиском.
     И выводим сред.арифм. значений точек интервала - это будет значение в точке point
+
     :param point: точка, которую ищем на графике
     :param mass_graf: график функции в виде [[массив Х][массив Y]]
     :return: значение в точке point по графику mass_graf
@@ -259,29 +260,32 @@ def look_graf(point: float, mass_graf: list) -> float:
 
 
 # используемые константы
-x_go = 178  # м^3ст.м^ - отношение добычи газа к нефти(не знаю на сколько важен параметр)
+# x_go = 178  # м^3ст.м^ - отношение добычи газа к нефти(не знаю на сколько важен параметр)
 # q_o_N_U_input = 1590  # ст.м^3/сутки - дебит нефти
 # q_g_N_U_input = 283  # тыс.м^ 3/сутки - дебит газа
 # q_w_N_U_input = 0  # ст.м^3/сутки - дебит воды
 B_o = 1.197  # м^3/ст.м^3 - объемный коэффициент нефти
-B_g = 0.0091  # м^3/ст.м^ - объемный коэффициент газа
+B_g = 0.0091  # м^3/ст.м^3 - объемный коэффициент газа
 B_w = 1  # м^3/ст.м^3 - объемный коэффициент воды
-R_s = 50.6  # ст.м^3/ст.м^3 - учитывает растворение газа в нефти(конденсацию) или выделение газа из нефти(выкипание)
+# R_s = 50.6  # ст.м^3/ст.м^3 - учитывает растворение газа в нефти(конденсацию) или выделение газа из нефти(выкипание)
 R_sw = 1
 d = 0.1524  # м - диаметр трубы
 g = 9.81  # м/c^2 - const
 sigma_o = 8.41 * pow(10, -3)  # кг/c^2 - поверхностное натяжение нефти
-rho_L = 762.64  # кг/м^3 - плотность жидкости
-rho_g = 94.16  # кг/м^3 - плотность газа
+sigma_w = 80 * pow(10, -3)
+# rho_L = 800 * (1-WC)/ B_o + 1000 * (1-WC)/ B_w  # 762.64  # кг/м^3 - плотность жидкости
+rho_o_N_U = 800  # кг/м^3 - плотность нефти в н.у
+rho_g_N_U = 700  # кг/м^3 - плотность газа в н.у
+rho_w_N_U = 1000  # кг/м^3 - плотность воды в н.у
+# rho_g = 700 / R_s #94.16  # кг/м^3 - плотность газа
+# rho_w = 1000
 mu_o = 0.97 * pow(10, -3)  # Па*c - вязкость нефти
+mu_w = 1 * pow(10, -3)
 varepsilon = 18.288 * pow(10, -6)  # м - абсолютная шероховатость трубы
-L = 2000  # м - длина скважины
-
-sigma_L = sigma_o
-mu_L = mu_o
+#L = 2000  # м - длина скважины
 
 
-def define_fp(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> list:
+def define_fp(q_l_N_U: float, R_s: float, WC: float = 0) -> list:
     """
     Функция, определяющая структуру потока.
     В зависимости от введенных значений дебитов определяем один из 4 режимов:
@@ -290,16 +294,20 @@ def define_fp(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> list:
     3 = переходный,
     4 = эмульсионный.
 
-    :param q_o_N_U: ст.м^3/сутки, дебит нефти
-    :param q_g_N_U: тыс.м^ 3/сутки, дебит газа
-    :param q_w_N_U: ст.м^3/сутки, дебит воды
-    :return: {1,2,3,4}, номер режима потока и еще 6 параметров, рассчитанных в данной функции
+    :param q_l_N_U: ст.м^3/сутки, дебит жидкости
+    :param R_s: ст.м^3/ст.м^3, газовый фактор
+    :param WC: %, обводненность
+    :return: {1,2,3,4}, номер режима потока и еще 12 параметров, рассчитанных в данной функции
     """
-    q_g_N_U = q_g_N_U * 1000
-    q_o = q_o_N_U * B_o / 86400  # объемный дебит нефти
-    q_w = q_w_N_U * B_w / 86400  # объемный дебит воды
+    sigma_L = sigma_o * (1 - WC) + sigma_w * WC
+    mu_L = mu_o * (1 - WC) + mu_w * WC
+    rho_g = rho_g_N_U / R_s  # кг/м^3 - плотность газа
+    rho_L = rho_o_N_U * (1 - WC) / B_o + rho_w_N_U * WC / B_w  # кг/м^3 - плотность жидкости
+    q_o = q_l_N_U * (1 - WC) * B_o / 86400  # объемный дебит нефти
+    q_w = q_l_N_U * WC * B_w / 86400  # объемный дебит воды
     q_L = q_o + q_w
-    q_g = (q_g_N_U - q_o_N_U * R_s - q_w_N_U * R_sw) * B_g / 86400  # объемный дебит газа
+    # q_g = (q_g_N_U - q_o_N_U * R_s - q_w_N_U * R_sw) * B_g / 86400  # объемный дебит газа
+    q_g = q_l_N_U * (1 - WC) * R_s * B_g / 86400  # объемный дебит газа
     A_p = math.pi * pow(d, 2) / 4  # площадь поперечного сечения трубы
     v_SL = q_L / A_p  # приведенная скорость жидкости
     v_Sg = q_g / A_p  # приведенная скорость газа
@@ -318,18 +326,19 @@ def define_fp(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> list:
         stage = 3
     elif 75 + 84 * pow(N_Lv, 0.75) < N_gv and N_gv <= 0.001:
         stage = 4
-    return [stage, v_SL, v_Sg, N_Lv, N_gv, N_d, N_L]
+    return [stage, q_L, q_g, rho_L, rho_g, sigma_L, mu_L, v_SL, v_Sg, N_Lv, N_gv, N_d, N_L]
 
 
-def calc_grad_fric(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> float:
+def calc_grad_fric(q_l_N_U: float, R_s: float, WC: float = 0) -> float:
     """
     Функция, вычисляющая градиент давления на трение
-    :param q_o_N_U: ст.м^3/сутки, дебит нефти
-    :param q_g_N_U: тыс.м^ 3/сутки, дебит газа
-    :param q_w_N_U: ст.м^3/сутки, дебит воды
+
+    :param q_l_N_U: ст.м^3/сутки, дебит жидкости
+    :param R_s: ст.м^3/ст.м^3, газовый фактор
+    :param WC: %, обводненность
     :return: кг/м^3, значение градиента на трение
     """
-    stage, v_SL, v_Sg, N_Lv, N_gv, N_d, N_L = define_fp(q_o_N_U, q_g_N_U, q_w_N_U)
+    stage, q_L, q_g, rho_L, rho_g, sigma_L, mu_L, v_SL, v_Sg, N_Lv, N_gv, N_d, N_L = define_fp(q_l_N_U, R_s, WC)
     v_m = v_SL + v_Sg
     # считаем для Пробкового режима
     N_ReL = rho_L * v_Sg * d / mu_L  # число Рейнольдса для жидкости
@@ -338,7 +347,7 @@ def calc_grad_fric(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> float:
     f_2_fric = look_graf((f_1 * v_Sg * pow(N_d, 2 / 3)) / (4 * v_SL), f_2_fric_mass)
     f_3 = 1 + f_1 / 4 * pow(v_Sg / (50 * v_SL), 0.5)
     f = f_1 * f_2_fric / f_3  # коэффициент трения
-    dp_dz_Prob = (f * rho_L * v_SL * v_m) / (g * 2 * d)
+    dp_dz_Prob = (f * rho_L * v_SL * v_m) / (2 * d)
     if stage == 1 or stage == 2:  # Пузырьковый и Пробковый режим
         return dp_dz_Prob
     # выбираем плотность газа в зависимости от Переходного или Эмульсионного режима и
@@ -361,7 +370,7 @@ def calc_grad_fric(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> float:
                 2 / 3.7 * (varepsilon / d) - 5.02 / N_Reg * math.log10(2 / 3.7 * (varepsilon / d) + 13 / N_Reg)), 2)
         else:
             f_em = 4 * (pow(4 * math.log10(0.27 * e_d), -2) + 0.067 * pow(e_d, 1.73))
-        dp_dz_Eml = (f_em * rho_g_Conv_Eml * pow(v_Sg, 2)) / (g * 2 * d)
+        dp_dz_Eml = (f_em * rho_g_Conv_Eml * pow(v_Sg, 2)) / (2 * d)
 
     if stage == 3:  # Переходный режим
         A = (75 + 84 * pow(N_Lv, 0.75) - N_gv) / (
@@ -373,15 +382,16 @@ def calc_grad_fric(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> float:
         return 0
 
 
-def calc_grad_grav(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> float:
+def calc_grad_grav(q_l_N_U: float, R_s: float, WC: float = 0) -> float:
     """
     Функция, вычисляющая градиент давления на гравитацию
-    :param q_o_N_U: ст.м^3/сутки, дебит нефти
-    :param q_g_N_U: тыс.м^ 3/сутки, дебит газа
-    :param q_w_N_U: ст.м^3/сутки, дебит воды
+
+    :param q_l_N_U: ст.м^3/сутки, дебит жидкости
+    :param R_s: ст.м^3/ст.м^3, газовый фактор
+    :param WC: %, обводненность
     :return: кг/м^3, значение градиента на гравитацию
     """
-    stage, v_SL, v_Sg, N_Lv, N_gv, N_d, N_L = define_fp(q_o_N_U, q_g_N_U, q_w_N_U)
+    stage, q_L, q_g, rho_L, rho_g, sigma_L, mu_L, v_SL, v_Sg, N_Lv, N_gv, N_d, N_L = define_fp(q_l_N_U, R_s, WC)
     v_m = v_SL + v_Sg
     # считаем для Пробкового режима
     if stage == 1 or stage == 2 or stage == 3:
@@ -395,15 +405,16 @@ def calc_grad_grav(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> float:
         F_7 = look_graf(N_L, F_7_mass)
         F_6_shift = 0.029 * N_d + F_6
         if stage == 1 or stage == 3:
-            S = F_1 + F_2 * N_Lv + F_3_shift * pow(N_gv / (1 + N_Lv),2)  # безразмерный показатель скорости проскальзывания
+            S = F_1 + F_2 * N_Lv + F_3_shift * pow(N_gv / (1 + N_Lv),
+                                                   2)  # безразмерный показатель скорости проскальзывания
         elif stage == 2:
             S = (1 + F_5) * (pow(N_gv, 0.982) + F_6_shift) / (1 + F_7 * N_Lv)
         v_s = S / pow(rho_L / (g * sigma_L), 0.25)  # скорость проскальзывания
         H_L = (v_s - v_m + pow((v_m - v_s) ** 2 + 4 * v_s * v_SL, 0.5)) / (2 * v_s)  # объемное содержание жидкости
         rho_s = rho_L * H_L + rho_g * (1 - H_L)  # плотность жидкости с учетом проскальзывания
-        dp_dz_Prob = rho_s
+        dp_dz_Prob = rho_s * g
     if stage == 1 or stage == 2:  # Пузырьковый и Пробковый режим
-        return dp_dz_Prob
+        return S  # dp_dz_Prob
     # выбираем плотность газа в зависимости от Переходного или Эмульсионного режима и
     # считаем dp_dz_Eml по формулам Эмульсионного режима
     if stage == 3:
@@ -411,14 +422,9 @@ def calc_grad_grav(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> float:
     elif stage == 4:
         rho_g_Conv_Eml = rho_g
     if stage == 3 or stage == 4:
-        q_g_N_U = q_g_N_U * 1000
-        q_o = q_o_N_U * B_o / 86400  # объемный дебит нефти
-        q_w = q_w_N_U * B_w / 86400  # объемный дебит воды
-        q_L = q_o + q_w
-        q_g = (q_g_N_U - q_o_N_U * R_s - q_w_N_U * R_sw) * B_g / 86400  # объемный дебит газа
-        H_L = q_L / (q_l + q_g) # объемное содержание жидкости
+        H_L = q_L / (q_L + q_g)  # объемное содержание жидкости
         rho_s = rho_L * H_L + rho_g_Conv_Eml * (1 - H_L)  # плотность жидкости с учетом проскальзывания
-        dp_dz_Eml = rho_s
+        dp_dz_Eml = rho_s * g
     if stage == 3:  # Переходный режим
         A = (75 + 84 * pow(N_Lv, 0.75) - N_gv) / (
                 (75 + 84 * pow(N_Lv, 0.75)) - (50 + 36 * N_Lv))  # коэффициент для эмульсионного режима
@@ -429,28 +435,29 @@ def calc_grad_grav(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> float:
         return 0
 
 
-def calc_grad(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> float:
+def calc_grad(q_l_N_U: float, R_s: float, WC: float = 0) -> float:
     """
     Функция, вычисляющая градиент давления на гравитацию
-    :param q_o_N_U: ст.м^3/сутки, дебит нефти
-    :param q_g_N_U: тыс.м^ 3/сутки, дебит газа
-    :param q_w_N_U: ст.м^3/сутки, дебит воды
+
+    :param q_l_N_U: ст.м^3/сутки, дебит жидкости
+    :param R_s: ст.м^3/ст.м^3, газовый фактор
+    :param WC: %, обводненность
     :return: бар/м, общий градиент давления = на трение + на гравитацию
     """
-    return 978 * pow(10, -7) * (calc_grad_fric(q_o_N_U, q_g_N_U, q_w_N_U) + calc_grad_grav(q_o_N_U, q_g_N_U, q_w_N_U))
+    return 978 * pow(10, -7) * (calc_grad_fric(q_l_N_U, R_s, WC) + calc_grad_grav(q_l_N_U, R_s, WC))
 
 
-def calc_pressure(q_o_N_U: float, q_g_N_U: float, q_w_N_U: float = 0) -> float:
+def calc_pressure(q_l_N_U: float, R_s: float, WC: float = 0, L: float = 2000) -> float:
     """
     Функция, определяющая давление в трубе путем интегрирования градиента
-    :param q_o_N_U: ст.м^3/сутки, дебит нефти
-    :param q_g_N_U: тыс.м^ 3/сутки, дебит газа
-    :param q_w_N_U: ст.м^3/сутки, дебит воды
+
+    :param q_l_N_U: ст.м^3/сутки, дебит жидкости
+    :param R_s: ст.м^3/ст.м^3, газовый фактор
+    :param WC: %, обводненность
+    :param L: м, длина
     :return: бар, давление на глубине L
     """
-    L_mass = [0.1, 0.15, 0.17, 0.15, 0.2, 0.08, 0.15]  # разбили длинну L на интервалы (процент от L) - для интеграла
-    P = 0.0  # давление на глубине L
-    for i in L_mass:
-        P += i * L * calc_grad(q_o_N_U, q_g_N_U, q_w_N_U)
-    return round(P, 3)
+    return round(L * calc_grad(q_l_N_U, R_s, WC), 3)
+
+
 
